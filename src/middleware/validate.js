@@ -1,0 +1,19 @@
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse({ body: req.body, params: req.params, query: req.query });
+    if (!result.success) {
+      return res.status(400).json({
+        error: "Invalid request",
+        details: result.error.issues.map(({ path, message }) => ({
+          field: path.join("."),
+          message,
+        })),
+      });
+    }
+
+    req.validated = result.data;
+    next();
+  };
+}
+
+module.exports = validate;

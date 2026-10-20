@@ -1,0 +1,260 @@
+{
+  "info": {
+    "_postman_id": "e37b09de-73e6-4c4c-a6a8-d24c6c94f00b",
+    "name": "Student Management API",
+    "description": "End-to-end auth, authorization, and student CRUD demonstration. Run requests in order after seeding an admin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "adminEmail", "value": "admin@example.com" },
+    { "key": "adminPassword", "value": "replace-with-seeded-admin-password" },
+    { "key": "regularEmail", "value": "student-user@example.com" },
+    { "key": "regularPassword", "value": "test-password-123" },
+    { "key": "userToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "studentEmail", "value": "" },
+    { "key": "studentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Register regular user",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"{{regularEmail}}\",\n  \"password\": \"{{regularPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/register"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.collectionVariables.set('regularEmail', 'demo-' + Date.now() + '@example.com');"]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Regular user registered', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.collectionVariables.set('userToken', body.accessToken);",
+              "pm.test('Registration does not grant admin role', () => pm.expect(body.user.role).to.eql('user'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Regular user cannot create students (403)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{userToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Unauthorized Student\",\n  \"email\": \"unauthorized@example.com\",\n  \"course\": \"Computer Science\",\n  \"age\": 20\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/students"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.collectionVariables.set('studentEmail', 'ada-' + Date.now() + '@example.com');"]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Non-admin writes are forbidden', () => pm.response.to.have.status(403));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get current user (authenticated)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{userToken}}" }],
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Current user profile returned', () => pm.response.to.have.status(200));",
+              "pm.test('Profile is for regular user', () => pm.expect(pm.response.json().user.role).to.eql('user'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Login as administrator",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/auth/login"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Administrator login succeeds', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().accessToken);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Create student (201)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"{{studentEmail}}\",\n  \"course\": \"Computer Science\",\n  \"age\": 20\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/students"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Student created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('studentId', pm.response.json().student._id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List students (pagination and search)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/api/students?page=1&limit=10&search=Ada"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Student list returned', () => pm.response.to.have.status(200));",
+              "pm.test('Pagination metadata returned', () => pm.expect(pm.response.json().pagination).to.have.property('totalPages'));",
+              "pm.test('Name search finds Ada', () => pm.expect(pm.response.json().students.some((student) => student.fullName === 'Ada Lovelace')).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get student by ID",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/api/students/{{studentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Student retrieved', () => pm.response.to.have.status(200));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update student (200)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fullName\": \"Ada Lovelace\",\n  \"email\": \"{{studentEmail}}\",\n  \"course\": \"Applied Computer Science\",\n  \"age\": 21\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{baseUrl}}/api/students/{{studentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Student updated', () => pm.response.to.have.status(200));",
+              "pm.test('Updated course returned', () => pm.expect(pm.response.json().student.course).to.eql('Applied Computer Science'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete student (204)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/api/students/{{studentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Student deleted', () => pm.response.to.have.status(204));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Deleted student returns 404",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": "{{baseUrl}}/api/students/{{studentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('Deleted student is not found', () => pm.response.to.have.status(404));"]
+          }
+        }
+      ]
+    }
+  ]
+}
